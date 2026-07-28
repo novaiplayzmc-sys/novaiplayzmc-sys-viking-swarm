@@ -32,15 +32,18 @@ const SPAWN_RAMP = 0.012;          // spawn interval shed per second survived
 // the starter ships `glitch`, a basic chaser). Row shape: { id, emoji, hp, speed, behavior }.
 const ENEMIES = {
   // Regular defenders
-  peasant:    { id: 'peasant',    emoji: '🧑‍🌾', hp: 15, speed: 70, behavior: 'chase' },
-  footman:    { id: 'footman',    emoji: '🗡️', hp: 25, speed: 55, behavior: 'chase' },
-  skirmisher: { id: 'skirmisher', emoji: '🏹', hp: 18, speed: 50, behavior: 'zigzag' },
+  peasant:    { id: 'peasant',    hp: 15, speed: 70, behavior: 'chase' },
+  footman:    { id: 'footman',    hp: 25, speed: 55, behavior: 'chase' },
+  scout:      { id: 'scout',      hp: 16, speed: 65, behavior: 'zigzag' },
+  archer:     { id: 'archer',     hp: 20, speed: 42, behavior: 'ranged', fireRate: 2.0, projectileDmg: 8 },
+  axeman:     { id: 'axeman',     hp: 30, speed: 48, behavior: 'chase' },
   // Bosses (knight = wave 3 only, others cycle from wave 6+)
-  knight:          { id: 'knight',          emoji: '🛡️', hp: 40,  speed: 50, behavior: 'chase',  touchDamage: 32, defence: 0.20, xp: 10, boss: true, radius: 22 },
-  crossbowCaptain: { id: 'crossbowCaptain', emoji: '🎯', hp: 55,  speed: 45, behavior: 'zigzag', touchDamage: 26, defence: 0.10, xp: 12, boss: true, radius: 20 },
-  templar:         { id: 'templar',         emoji: '⚔️', hp: 70,  speed: 55, behavior: 'chase',  touchDamage: 30, defence: 0.25, xp: 15, boss: true, radius: 24 },
-  berserker:       { id: 'berserker',       emoji: '💢', hp: 50,  speed: 75, behavior: 'chase',  touchDamage: 40, defence: 0.05, xp: 12, boss: true, radius: 20 },
-  warlord:         { id: 'warlord',         emoji: '💀', hp: 100, speed: 40, behavior: 'chase',  touchDamage: 45, defence: 0.35, xp: 20, boss: true, radius: 28 },
+  knight:          { id: 'knight',          hp: 55,  speed: 48, behavior: 'chase',   touchDamage: 34, defence: 0.20, xp: 12, boss: true, radius: 24 },
+  crossbowCaptain: { id: 'crossbowCaptain', hp: 70,  speed: 42, behavior: 'ranged', touchDamage: 22, defence: 0.12, xp: 15, boss: true, radius: 22, fireRate: 1.4, projectileDmg: 12 },
+  templar:         { id: 'templar',         hp: 90,  speed: 50, behavior: 'chase',   touchDamage: 36, defence: 0.28, xp: 18, boss: true, radius: 26 },
+  berserker:       { id: 'berserker',       hp: 70,  speed: 72, behavior: 'chase',   touchDamage: 48, defence: 0.05, xp: 16, boss: true, radius: 22 },
+  warlord:         { id: 'warlord',         hp: 130, speed: 38, behavior: 'chase',   touchDamage: 52, defence: 0.35, xp: 25, boss: true, radius: 30 },
+  king:            { id: 'king',            hp: 200, speed: 32, behavior: 'chase',   touchDamage: 60, defence: 0.40, xp: 50, boss: true, radius: 34, finalBoss: true },
 };
 
 // Weapons (auto-fire). pattern ∈ straight | spread | boomerang (engine supports all
@@ -73,40 +76,58 @@ const BURSTS = {
   warlord:          ['#222', '#f44', '#b8860b', '#ff0'],
 };
 
-// Wave definitions. Each { enemies: [{id, count}], spawnEvery: seconds, boss?: id }.
-// Knight only appears ONCE at wave 3. Later bosses cycle jarl → berserker → warlord.
+// Wave definitions. Bosses every ~5 waves. King at wave 25 (final) — game ends on victory.
 const WAVES = [
-  { enemies: [{id:'peasant', count:5}],                                                    spawnEvery: 1.1 },
-  { enemies: [{id:'peasant', count:8}],                                                    spawnEvery: 0.9 },
-  { enemies: [{id:'peasant', count:4},{id:'footman', count:4}],                            spawnEvery: 0.8, boss: 'knight' },
-  { enemies: [{id:'footman', count:7},{id:'peasant', count:3}],                            spawnEvery: 0.7 },
-  { enemies: [{id:'footman', count:5},{id:'skirmisher', count:3}],                         spawnEvery: 0.65 },
-  { enemies: [{id:'footman', count:6},{id:'skirmisher', count:4}],                         spawnEvery: 0.6, boss: 'crossbowCaptain' },
-  { enemies: [{id:'footman', count:7},{id:'skirmisher', count:4},{id:'peasant', count:3}], spawnEvery: 0.55 },
-  { enemies: [{id:'footman', count:8},{id:'skirmisher', count:5}],                         spawnEvery: 0.5 },
-  { enemies: [{id:'footman', count:9},{id:'skirmisher', count:5},{id:'peasant', count:4}], spawnEvery: 0.45, boss: 'templar' },
-  { enemies: [{id:'footman', count:10},{id:'skirmisher', count:6}],                        spawnEvery: 0.4 },
-  { enemies: [{id:'footman', count:10},{id:'skirmisher', count:7}],                        spawnEvery: 0.38 },
-  { enemies: [{id:'footman', count:11},{id:'skirmisher', count:7},{id:'peasant', count:5}],spawnEvery: 0.35, boss: 'berserker' },
-  { enemies: [{id:'footman', count:12},{id:'skirmisher', count:8}],                        spawnEvery: 0.32 },
-  { enemies: [{id:'footman', count:13},{id:'skirmisher', count:8},{id:'peasant', count:6}],spawnEvery: 0.3 },
-  { enemies: [{id:'footman', count:14},{id:'skirmisher', count:9}],                        spawnEvery: 0.28, boss: 'warlord' },
+  // Wave 1-4: Easy buildup
+  { enemies: [{id:'peasant',count:4}],                                                          spawnEvery: 1.1 },
+  { enemies: [{id:'peasant',count:6}],                                                          spawnEvery: 1.0 },
+  { enemies: [{id:'peasant',count:4},{id:'footman',count:3}],                                   spawnEvery: 0.9 },
+  { enemies: [{id:'footman',count:5},{id:'peasant',count:3}],                                   spawnEvery: 0.85 },
+  // Wave 5: BOSS — Knight
+  { enemies: [{id:'footman',count:5},{id:'scout',count:3}],                                     spawnEvery: 0.8,  boss:'knight' },
+  // Wave 6-9: Introducing archers and axemen
+  { enemies: [{id:'footman',count:4},{id:'archer',count:3}],                                    spawnEvery: 0.78 },
+  { enemies: [{id:'axeman',count:4},{id:'scout',count:4}],                                      spawnEvery: 0.74 },
+  { enemies: [{id:'footman',count:5},{id:'archer',count:3},{id:'axeman',count:2}],              spawnEvery: 0.7 },
+  { enemies: [{id:'archer',count:5},{id:'axeman',count:4}],                                     spawnEvery: 0.65 },
+  // Wave 10: BOSS — Crossbow Captain
+  { enemies: [{id:'footman',count:5},{id:'archer',count:4},{id:'scout',count:3}],               spawnEvery: 0.62, boss:'crossbowCaptain' },
+  // Wave 11-14: Escalation
+  { enemies: [{id:'axeman',count:6},{id:'archer',count:4}],                                     spawnEvery: 0.6 },
+  { enemies: [{id:'footman',count:6},{id:'archer',count:4},{id:'axeman',count:3}],              spawnEvery: 0.55 },
+  { enemies: [{id:'axeman',count:7},{id:'scout',count:5}],                                      spawnEvery: 0.52 },
+  { enemies: [{id:'footman',count:6},{id:'archer',count:5},{id:'axeman',count:4}],              spawnEvery: 0.48 },
+  // Wave 15: BOSS — Templar
+  { enemies: [{id:'axeman',count:6},{id:'archer',count:5},{id:'scout',count:4}],                spawnEvery: 0.45, boss:'templar' },
+  // Wave 16-19
+  { enemies: [{id:'axeman',count:7},{id:'archer',count:5},{id:'footman',count:4}],              spawnEvery: 0.42 },
+  { enemies: [{id:'archer',count:7},{id:'axeman',count:6}],                                     spawnEvery: 0.4 },
+  { enemies: [{id:'footman',count:7},{id:'archer',count:6},{id:'axeman',count:5}],              spawnEvery: 0.38 },
+  { enemies: [{id:'axeman',count:8},{id:'scout',count:7},{id:'archer',count:5}],                spawnEvery: 0.35 },
+  // Wave 20: BOSS — Berserker
+  { enemies: [{id:'axeman',count:7},{id:'archer',count:6},{id:'footman',count:5}],              spawnEvery: 0.33, boss:'berserker' },
+  // Wave 21-24: Heavy push
+  { enemies: [{id:'axeman',count:8},{id:'archer',count:7},{id:'scout',count:5}],                spawnEvery: 0.3 },
+  { enemies: [{id:'footman',count:8},{id:'archer',count:7},{id:'axeman',count:6}],              spawnEvery: 0.28 },
+  { enemies: [{id:'axeman',count:9},{id:'archer',count:8},{id:'scout',count:6}],                spawnEvery: 0.26 },
+  { enemies: [{id:'axeman',count:10},{id:'archer',count:8},{id:'footman',count:6}],             spawnEvery: 0.24 },
+  // Wave 25: FINAL BOSS — The King (victory on kill!)
+  { enemies: [{id:'axeman',count:8},{id:'archer',count:6},{id:'footman',count:6}],              spawnEvery: 0.22, boss:'king' },
 ];
 
-// Get wave config. For waves beyond the defined list, generate procedurally.
-// Knight only appears at wave 3 — later boss waves cycle jarl/berserker/warlord.
+// Get wave config. For waves beyond 25, generate procedurally (no king).
 function getWaveConfig(waveNum) {
   if (waveNum <= WAVES.length) return WAVES[waveNum - 1];
   const isBossWave = waveNum % 5 === 0;
   const scale = 1 + (waveNum - WAVES.length) * 0.06;
-  const bossCycle = ['crossbowCaptain', 'templar', 'berserker', 'warlord'];
+  const bossCycle = ['crossbowCaptain', 'templar', 'berserker', 'warlord']; // king never repeats
   const cfg = {
     enemies: [
-      { id: 'footman', count: Math.round(10 * scale) },
-      { id: 'skirmisher', count: Math.round(6 * scale) },
-      { id: 'peasant', count: Math.round(5 * scale) },
+      { id: 'axeman', count: Math.round(10 * scale) },
+      { id: 'archer', count: Math.round(7 * scale) },
+      { id: 'footman', count: Math.round(6 * scale) },
     ],
-    spawnEvery: Math.max(0.15, 0.35 - (waveNum - WAVES.length) * 0.008),
+    spawnEvery: Math.max(0.15, 0.25 - (waveNum - WAVES.length) * 0.006),
   };
   if (isBossWave) cfg.boss = bossCycle[(Math.floor(waveNum / 5) - 1) % bossCycle.length];
   return cfg;
@@ -251,7 +272,7 @@ function freshGame(weaponId) {
     status: 'start', time: 0, score: 0,
     level: 1, xp: 0, xpToNext: xpForLevel(1),
     player,
-    enemies: [], projectiles: [], gold: [], particles: [], floaters: [],
+    enemies: [], projectiles: [], enemyProjectiles: [], gold: [], particles: [], floaters: [],
     shake: 0, fireTimer: 0,
     // Wave system state
     wave: 1, wavePhase: 'announce', waveSpawnQueue: [], waveSpawnTimer: 0,
@@ -316,7 +337,8 @@ function spawnBossById(state, bossId) {
     touchDamage: def.touchDamage || ENEMY_TOUCH_DAMAGE,
     defence: def.defence || 0,
     boss: true,
-    age: 0, split: false,
+    age: 0, attackTimer: def.fireRate ? 0.5 : 0,
+    split: false,
   });
   state.bossFightActive = true;
   state.bossesDefeated.push(bossId);
@@ -460,7 +482,8 @@ function update(state, dt, input) {
           touchDamage: def.touchDamage || ENEMY_TOUCH_DAMAGE,
           defence: def.defence || 0,
           boss: false,
-          age: 0, split: def.behavior === 'splitter',
+          age: 0, attackTimer: def.fireRate ? Math.random() * def.fireRate : 0,
+          split: def.behavior === 'splitter',
         });
       }
       state.waveSpawnTimer = waveCfg.spawnEvery;
@@ -525,6 +548,41 @@ function update(state, dt, input) {
     }
     e.x += vx * dt; e.y += vy * dt;
   }
+
+  // --- ranged enemy attacks ---
+  for (const e of state.enemies) {
+    if (e.behavior !== 'ranged') continue;
+    const def = ENEMIES[e.id];
+    e.attackTimer = (e.attackTimer || 0) - dt;
+    if (e.attackTimer <= 0) {
+      e.attackTimer = def.fireRate || 1.5;
+      const s = steer(e.x, e.y, p.x, p.y, 180);
+      state.enemyProjectiles.push({
+        x: e.x, y: e.y, vx: s.vx, vy: s.vy,
+        damage: def.projectileDmg || 6, radius: 4, life: 2.5,
+      });
+    }
+  }
+  // --- move enemy projectiles ---
+  for (const ep of state.enemyProjectiles) { ep.life -= dt; ep.x += ep.vx * dt; ep.y += ep.vy * dt; }
+  state.enemyProjectiles = state.enemyProjectiles.filter((ep) =>
+    ep.life > 0 && ep.x > -40 && ep.x < ARENA.w + 40 && ep.y > -40 && ep.y < ARENA.h + 40);
+
+  // --- enemy projectile → hero ---
+  if (p.invuln <= 0) {
+    for (const ep of state.enemyProjectiles) {
+      if (circleHit(p.x, p.y, p.radius, ep.x, ep.y, ep.radius)) {
+        p.hp = clamp(p.hp - (ep.damage || 6), 0, p.maxHp);
+        p.invuln = ENEMY_HIT_COOLDOWN;
+        state.shake = SHAKE_ON_HIT;
+        state._hurt = true;
+        ep.life = 0;
+        if (p.hp <= 0) { gameOver(state); return; }
+        break;
+      }
+    }
+  }
+  state.enemyProjectiles = state.enemyProjectiles.filter((ep) => ep.life > 0);
 
   // --- move projectiles (boomerangs reverse once at half-life) ---
   for (const pr of state.projectiles) {
@@ -677,8 +735,8 @@ function cssVar(name, fallback) {
   return v || fallback;
 }
 
-// The viking hero: a round shield with horns that points where it's aiming.
-// Squashes on a pop. Color from --hero CSS variable.
+// The viking hero: horned helmet, bearded face, tunic, shield, and raised axe.
+// Rotates to face aim direction, squashes on pop.
 function drawHero(ctx, p) {
   const squash = 1 + (p.pop > 0 ? (p.pop / POP_TIME) * 0.35 : 0);
   ctx.save();
@@ -687,40 +745,75 @@ function drawHero(ctx, p) {
   ctx.scale(squash, 2 - squash);
   if (p.invuln > 0 && Math.floor(p.invuln * 20) % 2 === 0) ctx.globalAlpha = 0.5;
   const r = p.radius;
-  // Shield body
-  ctx.fillStyle = '#4a1515';
+
+  // Body / tunic
+  ctx.fillStyle = '#5a3020';
+  ctx.beginPath(); ctx.arc(0, r * 0.1, r * 0.5, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#6b4030';
+  ctx.fillRect(-r * 0.4, r * 0.05, r * 0.8, r * 0.55);
+
+  // Beard
+  ctx.fillStyle = '#c4943a';
   ctx.beginPath();
-  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.moveTo(-r * 0.35, -r * 0.1);
+  ctx.lineTo(0, r * 0.3);
+  ctx.lineTo(r * 0.35, -r * 0.1);
   ctx.fill();
-  // Shield rim
-  ctx.strokeStyle = '#b8860b';
-  ctx.lineWidth = 3;
-  ctx.stroke();
-  // Center boss
-  ctx.fillStyle = '#777';
-  ctx.beginPath();
-  ctx.arc(0, 0, r * 0.28, 0, Math.PI * 2);
-  ctx.fill();
+
+  // Face
+  ctx.fillStyle = '#e8c8a0';
+  ctx.beginPath(); ctx.arc(0, -r * 0.15, r * 0.28, 0, Math.PI * 2); ctx.fill();
+
+  // Eyes
+  ctx.fillStyle = '#1a1aff';
+  ctx.fillRect(-r * 0.12, -r * 0.22, r * 0.08, r * 0.06);
+  ctx.fillRect(r * 0.04, -r * 0.22, r * 0.08, r * 0.06);
+
+  // Helmet dome
+  ctx.fillStyle = '#555';
+  ctx.beginPath(); ctx.arc(0, -r * 0.22, r * 0.32, Math.PI, 0); ctx.fill();
+  ctx.fillRect(-r * 0.32, -r * 0.22, r * 0.64, r * 0.12);
+  // Nose guard
+  ctx.fillRect(-r * 0.03, -r * 0.35, r * 0.06, r * 0.2);
+
   // Horns
-  ctx.fillStyle = '#d4c4a8';
+  ctx.fillStyle = '#e8d8b8';
   ctx.beginPath();
-  ctx.moveTo(-r * 0.15, -r * 0.6);
-  ctx.lineTo(-r * 0.45, -r * 1.3);
-  ctx.lineTo(r * 0.1, -r * 0.7);
+  ctx.moveTo(-r * 0.2, -r * 0.32);
+  ctx.quadraticCurveTo(-r * 0.6, -r * 0.8, -r * 0.5, -r * 1.0);
+  ctx.quadraticCurveTo(-r * 0.35, -r * 0.7, -r * 0.15, -r * 0.3);
   ctx.fill();
   ctx.beginPath();
-  ctx.moveTo(r * 0.15, -r * 0.6);
-  ctx.lineTo(r * 0.45, -r * 1.3);
-  ctx.lineTo(-r * 0.1, -r * 0.7);
+  ctx.moveTo(r * 0.2, -r * 0.32);
+  ctx.quadraticCurveTo(r * 0.6, -r * 0.8, r * 0.5, -r * 1.0);
+  ctx.quadraticCurveTo(r * 0.35, -r * 0.7, r * 0.15, -r * 0.3);
   ctx.fill();
-  // Direction wedge
-  ctx.fillStyle = cssVar('--hero', '#ff3b3b');
+
+  // Shield (round, on left side of body)
+  ctx.fillStyle = '#4a1515';
+  ctx.beginPath(); ctx.arc(-r * 0.45, r * 0.0, r * 0.35, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#b8860b'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(-r * 0.45, r * 0.0, r * 0.35, 0, Math.PI * 2); ctx.stroke();
+  ctx.fillStyle = '#777';
+  ctx.beginPath(); ctx.arc(-r * 0.45, r * 0.0, r * 0.1, 0, Math.PI * 2); ctx.fill();
+
+  // Axe (raised in right hand, pointing forward)
+  ctx.fillStyle = '#a0a0a0';
   ctx.beginPath();
-  ctx.moveTo(r, 0);
-  ctx.lineTo(r * 0.15, r * 0.3);
-  ctx.lineTo(r * 0.15, -r * 0.3);
+  ctx.moveTo(r * 0.3, -r * 0.35);
+  ctx.lineTo(r * 0.5, -r * 0.6);
+  ctx.lineTo(r * 0.8, -r * 0.4);
+  ctx.lineTo(r * 0.7, -r * 0.2);
+  ctx.lineTo(r * 0.4, -r * 0.25);
   ctx.closePath();
   ctx.fill();
+  // Axe handle
+  ctx.strokeStyle = '#6b4423'; ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(r * 0.4, -r * 0.3);
+  ctx.lineTo(r * 0.25, r * 0.15);
+  ctx.stroke();
+
   ctx.restore();
 }
 
@@ -943,18 +1036,49 @@ function render(ctx, state) {
     ctx.restore();
   }
 
-  // Projectiles — small throwing axes
+  // Projectiles — throwing axes (blade + handle, rotated to flight direction)
   for (const pr of state.projectiles) {
     ctx.save(); ctx.translate(pr.x, pr.y);
-    ctx.rotate(Math.atan2(pr.vy, pr.vx) + Math.PI / 4);
-    // Axe head
-    ctx.fillStyle = '#aaa';
-    ctx.fillRect(-3, -6, 6, 7);
-    ctx.fillStyle = '#ccc';
-    ctx.beginPath(); ctx.moveTo(3, -6); ctx.lineTo(8, -9); ctx.lineTo(3, -1); ctx.fill();
-    // Handle
-    ctx.fillStyle = '#5a3820';
-    ctx.fillRect(-1.5, 1, 3, 8);
+    ctx.rotate(Math.atan2(pr.vy, pr.vx) - Math.PI / 2);
+    // Wooden handle
+    ctx.fillStyle = '#6b4423';
+    ctx.fillRect(-1.5, -2, 3, 14);
+    // Axe head — wider curved blade
+    ctx.fillStyle = '#a0a0a0';
+    ctx.beginPath();
+    ctx.moveTo(-7, -6);
+    ctx.lineTo(-3, -4);
+    ctx.lineTo(0, 2);
+    ctx.lineTo(3, -4);
+    ctx.lineTo(7, -6);
+    ctx.lineTo(6, -8);
+    ctx.lineTo(3, -5);
+    ctx.lineTo(0, -1);
+    ctx.lineTo(-3, -5);
+    ctx.lineTo(-6, -8);
+    ctx.closePath();
+    ctx.fill();
+    // Blade edge highlight
+    ctx.fillStyle = '#d0d0d0';
+    ctx.beginPath();
+    ctx.moveTo(-5, -7);
+    ctx.lineTo(-2, -4);
+    ctx.lineTo(0, 1);
+    ctx.lineTo(2, -4);
+    ctx.lineTo(5, -7);
+    ctx.lineTo(0, -2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // Enemy projectiles — small arrows
+  for (const ep of state.enemyProjectiles) {
+    ctx.save(); ctx.translate(ep.x, ep.y);
+    ctx.rotate(Math.atan2(ep.vy, ep.vx));
+    ctx.fillStyle = '#8b4513';
+    ctx.beginPath(); ctx.moveTo(6, 0); ctx.lineTo(-4, -2.5); ctx.lineTo(-2, 0);
+    ctx.lineTo(-4, 2.5); ctx.closePath(); ctx.fill();
     ctx.restore();
   }
 
@@ -1097,11 +1221,13 @@ function init() {
   };
 
   window.addEventListener('keydown', (e) => {
-    if ([].concat(KEYS_LEFT, KEYS_RIGHT, KEYS_UP, KEYS_DOWN).includes(e.key)) e.preventDefault();
+    // Prevent browser defaults for all game keys so Shift/Alt/etc. don't break movement
+    const allKeys = [].concat(KEYS_LEFT, KEYS_RIGHT, KEYS_UP, KEYS_DOWN, ['Shift','ShiftLeft','ShiftRight','Control','Alt','Meta','Tab']);
+    if (allKeys.includes(e.key)) e.preventDefault();
     held.add(e.key);
   });
   window.addEventListener('keyup', (e) => held.delete(e.key));
-  window.addEventListener('blur', () => held.clear()); // fix: clear stuck keys when window loses focus
+  window.addEventListener('blur', () => held.clear());
 
   const startBtn = document.getElementById('start-btn');
   if (startBtn) startBtn.addEventListener('click', handlers.onStart);
