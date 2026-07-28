@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Viking Swarm</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="app">
+    <header class="hud">
+      <div class="hud-left">
+        <div class="hp"><div class="hp-fill" id="hp-fill"></div></div>
+        <span class="level" id="level">Lv 1</span>
+      </div>
+      <div class="hud-mid"><span class="wave" id="wave">Wave 0</span><span class="timer" id="timer">0:00</span></div>
+      <div class="hud-right">
+        <span class="score-label">PLUNDER</span><span class="score" id="score">0</span>
+        <button id="mute" class="iconbtn" aria-pressed="false" aria-label="Toggle sound">🔊</button>
+      </div>
+    </header>
+
+    <div class="xp"><div class="xp-fill" id="xp-fill"></div></div>
+
+    <section class="stage">
+      <canvas id="arena" width="720" height="480" aria-label="Swarm Survivor arena"></canvas>
+
+      <div class="overlay" id="start-screen">
+        <h1>Viking Swarm</h1>
+        <p class="tagline">Move with arrows / WASD. Your axe flies by itself. Survive the waves, warrior.</p>
+        <button class="big-btn" id="start-btn">▶ PLAY</button>
+        <p class="best">Best run: <span id="start-best">0:00</span></p>
+      </div>
+
+      <div class="overlay" id="levelup" hidden>
+        <h2>ODIN SMILES UPON YOU — choose a blessing</h2>
+        <div class="cards" id="cards"></div>
+      </div>
+
+      <div class="overlay" id="gameover" hidden>
+        <h2>Fallen in Battle!</h2>
+        <p class="survived">You fought for <span id="over-time">0:00</span></p>
+        <p class="best">Best run: <span id="over-best">0:00</span></p>
+        <button class="big-btn" id="restart-btn">↻ PLAY AGAIN</button>
+      </div>
+    </section>
+
+    <footer class="tips">Slay the foe → grab the gold → grow stronger → pick a blessing. How long can a viking last?</footer>
+  </main>
+  <script src="game.js"></script>
+</body>
+</html>
