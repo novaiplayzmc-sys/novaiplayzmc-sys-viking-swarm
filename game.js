@@ -1181,6 +1181,18 @@ function render(ctx, state) {
   ctx.restore();
 }
 
+// Viking rank title for a given level
+function vikingRank(level) {
+  if (level <= 2) return 'Thrall';
+  if (level <= 4) return 'Skirl';
+  if (level <= 6) return 'Huskarl';
+  if (level <= 8) return 'Berserker';
+  if (level <= 10) return 'Hersir';
+  if (level <= 13) return 'Jarl';
+  if (level <= 16) return 'Oberjarl';
+  return 'Konungr';
+}
+
 // ===== HUD + overlays (DOM — browser only) =====
 function updateHud(state) {
   if (typeof document === 'undefined') return;
@@ -1188,7 +1200,7 @@ function updateHud(state) {
   set('hp-fill', (el) => { el.style.width = clamp(state.player.hp / state.player.maxHp * 100, 0, 100) + '%'; });
   set('timer', (el) => { el.textContent = formatTime(state.time); });
   set('score', (el) => { el.textContent = String(state.score); });
-  set('level', (el) => { el.textContent = 'Raider ' + state.level; });
+  set('level', (el) => { el.textContent = vikingRank(state.level) + ' Lv' + state.level; });
   set('wave', (el) => { el.textContent = 'Wave ' + (state.wave || 1); });
   set('xp-fill', (el) => { el.style.width = clamp(state.xp / state.xpToNext * 100, 0, 100) + '%'; });
 }
@@ -1246,11 +1258,20 @@ function inputVector() {
   if (KEYS_RIGHT.some((k) => held.has(k))) x += 1;
   if (KEYS_UP.some((k) => held.has(k))) y -= 1;
   if (KEYS_DOWN.some((k) => held.has(k))) y += 1;
+  // Touch controls: direction from player position to touch point
+  if (touchActive && state && state.player) {
+    const dx = touchX - state.player.x;
+    const dy = touchY - state.player.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist > 10) { x += dx / dist; y += dy / dist; }
+  }
   return { x, y };
 }
 
 let state = null;
 let lastStatus = null;
+let touchActive = false;
+let touchX = 0, touchY = 0;
 
 function startRun() {
   state.status = 'playing';
@@ -1293,6 +1314,30 @@ function init() {
   });
   window.addEventListener('keyup', (e) => held.delete(e.key));
   window.addEventListener('blur', () => held.clear());
+
+  // Touch controls for mobile
+  canvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = ARENA.w / rect.width;
+    const scaleY = ARENA.h / rect.height;
+    touchX = (e.touches[0].clientX - rect.left) * scaleX;
+    touchY = (e.touches[0].clientY - rect.top) * scaleY;
+    touchActive = true;
+  }, { passive: false });
+  canvas.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = ARENA.w / rect.width;
+    const scaleY = ARENA.h / rect.height;
+    touchX = (e.touches[0].clientX - rect.left) * scaleX;
+    touchY = (e.touches[0].clientY - rect.top) * scaleY;
+    touchActive = true;
+  }, { passive: false });
+  canvas.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    touchActive = false;
+  }, { passive: false });
 
   const startBtn = document.getElementById('start-btn');
   if (startBtn) startBtn.addEventListener('click', handlers.onStart);
