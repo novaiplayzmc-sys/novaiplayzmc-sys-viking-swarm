@@ -57,9 +57,13 @@ const WEAPONS = {
 // Upgrades (level-up cards). name + flavor are the VOICE surface — neutral in the
 // starter, re-skinned by the kid's CLAUDE.md. apply(state) mutates the run's stats.
 const UPGRADES = {
-  power: { id: 'power', name: 'Sharper Axes',    flavor: 'Your axes bite deeper into the foe!', apply: (s) => { s.player.damage += 5; } },
-  rapid: { id: 'rapid', name: 'Berserker Fury',  flavor: 'Hurl axes faster, like a madman!',    apply: (s) => { s.player.fireRate += 0.6; } },
-  swift: { id: 'swift', name: 'Fleet Footed',    flavor: 'Run like the northern wind!',          apply: (s) => { s.player.moveSpeed += 36; } },
+  power:     { id: 'power',     name: "Thor's Might",         flavor: 'The thunder god blesses thy axes with crushing force.', apply: (s) => { s.player.damage += 5; } },
+  rapid:     { id: 'rapid',     name: "Odin's Fury",          flavor: 'The Allfather fills thee with berserker speed.',       apply: (s) => { s.player.fireRate += 0.6; } },
+  swift:     { id: 'swift',     name: "Freyr's Wind",         flavor: 'The god of harvest grants thee swift feet.',            apply: (s) => { s.player.moveSpeed += 36; } },
+  vitality:  { id: 'vitality',  name: "Heimdall's Vigilance", flavor: 'The watchman fortifies thy life force with +25 HP.',    apply: (s) => { s.player.maxHp += 25; s.player.hp += 25; } },
+  twinShot:  { id: 'twinShot',  name: "Tyr's Twin Strike",    flavor: 'The war god splits each throw into two axes!',          apply: (s) => { s.player.projectiles += 1; } },
+  goldRush:  { id: 'goldRush',  name: "Njord's Bounty",       flavor: 'The sea god fills fallen foes with riches (+50% gold).', apply: (s) => { s.player.goldMult = (s.player.goldMult || 1) + 0.5; } },
+  thornMail: { id: 'thornMail', name: "Skadi's Frost Armor",   flavor: 'The ice goddess returns 30% of damage back to foes.',   apply: (s) => { s.player.thorns = (s.player.thorns || 0) + 0.3; } },
 };
 
 // Particle bursts per content id, with a graceful fallback. Add a row when you add
@@ -68,12 +72,15 @@ const BURSTS = {
   _default:         ['#ffaa44', '#ff6644'],
   peasant:          ['#8b6914', '#d4a574', '#5a3820'],
   footman:          ['#aaa', '#666', '#ccc'],
-  skirmisher:       ['#4a6030', '#8b6914', '#6a8050'],
+  scout:            ['#5a6530', '#8a9040', '#4a5020'],
+  archer:           ['#3a5020', '#8b6914', '#4a6030'],
+  axeman:           ['#6a4a2a', '#999', '#6b4423'],
   knight:           ['#888', '#b8860b', '#ccc'],
   crossbowCaptain:  ['#5a4a3a', '#8b6914', '#4a3020'],
   templar:          ['#ddd', '#b8860b', '#8b2020'],
   berserker:        ['#d4a574', '#f44', '#5a3a20'],
   warlord:          ['#222', '#f44', '#b8860b', '#ff0'],
+  king:             ['#ffd700', '#8b0000', '#4a1070', '#ffd700'],
 };
 
 // Wave definitions. Bosses every ~5 waves. King at wave 25 (final) — game ends on victory.
@@ -337,6 +344,7 @@ function spawnBossById(state, bossId) {
     touchDamage: def.touchDamage || ENEMY_TOUCH_DAMAGE,
     defence: def.defence || 0,
     boss: true,
+    finalBoss: def.finalBoss || false,
     age: 0, attackTimer: def.fireRate ? 0.5 : 0,
     split: false,
   });
@@ -370,6 +378,7 @@ function killEnemy(state, e) {
   spawnBurst(state, e.x, e.y, e.id);
   state._kill = true;
   if (e.boss) { state.bossFightActive = false; state._bossKill = true; }
+  if (e.finalBoss) { victory(state); return; }
   if (e.split) {
     const childHp = Math.max(1, Math.round(e.maxHp / 2));
     for (let i = 0; i < 2; i++) {
@@ -414,6 +423,13 @@ function gameOver(state) {
   state.status = 'over';
   state.best = saveBest(state.time);
   state._over = true;
+}
+
+function victory(state) {
+  state.status = 'victory';
+  state.best = saveBest(state.time);
+  state._victory = true;
+  spawnFloater(state, ARENA.w / 2, ARENA.h / 2 - 30, '👑 THE KING IS DEAD! VALHALLA! 👑', 'boss', 4.0);
 }
 
 // ===== Engine: the simulation step =====
@@ -624,6 +640,8 @@ function update(state, dt, input) {
         p.invuln = ENEMY_HIT_COOLDOWN;
         state.shake = SHAKE_ON_HIT;
         state._hurt = true;
+        // Thorns: reflect damage back to attacker
+        if (state.player.thorns) e.hp -= Math.round((e.touchDamage || ENEMY_TOUCH_DAMAGE) * state.player.thorns);
         if (p.hp <= 0) { gameOver(state); return; }
         break;
       }
@@ -635,9 +653,10 @@ function update(state, dt, input) {
   const kept = [];
   for (const gd of state.gold) {
     if (circleHit(p.x, p.y, p.radius + 18, gd.x, gd.y, gd.radius)) {
-      gained += gd.value;
-      state.score += gd.value * 10;
-      spawnFloater(state, gd.x, gd.y, '+' + gd.value, 'xp');
+      const multiVal = Math.round(gd.value * (state.player.goldMult || 1));
+      gained += multiVal;
+      state.score += multiVal * 10;
+      spawnFloater(state, gd.x, gd.y, '+' + multiVal, 'xp');
       state._gold = true;
     } else kept.push(gd);
   }
@@ -705,6 +724,7 @@ const SFX = {
   boss:    (c, t) => { [98, 73, 55].forEach((f, i) => tone(c, f, t + i * 0.15, 0.45, 'sawtooth', 0.18)); },
   // Boss kill — triumphant fanfare
   bossKill:(c, t) => { [392, 523, 659, 784, 1047].forEach((f, i) => tone(c, f, t + i * 0.09, 0.2, 'triangle', 0.14)); },
+  victory: (c, t) => { [523, 659, 784, 1047, 1319, 1568].forEach((f, i) => tone(c, f, t + i * 0.1, 0.3, 'triangle', 0.16)); },
 };
 function sfx(name) {
   const ctx = ensureAudio();
@@ -724,6 +744,7 @@ function consumeAudioEvents(state) {
   if (state._bossWarn) { sfx('bossWarn'); state._bossWarn = false; }
   if (state._boss)      { sfx('boss');      state._boss = false; }
   if (state._bossKill)  { sfx('bossKill');  state._bossKill = false; }
+  if (state._victory)   { sfx('victory');   state._victory = false; }
 }
 
 // ===== Render (canvas 2D — browser only) =====
@@ -992,15 +1013,51 @@ function drawEnemy(ctx, e) {
       break;
     }
     case 'warlord': {
-      ctx.fillStyle = '#222'; ctx.fillRect(-8, -2, 16, 16); // dark plate
-      ctx.fillStyle = '#333'; ctx.beginPath(); ctx.arc(0, -8, 8, 0, Math.PI * 2); ctx.fill(); // helm
-      // Crown spikes
+      ctx.fillStyle = '#222'; ctx.fillRect(-8, -2, 16, 16);
+      ctx.fillStyle = '#333'; ctx.beginPath(); ctx.arc(0, -8, 8, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = '#b8860b';
       for (let ci = -6; ci <= 6; ci += 3) ctx.fillRect(ci, -18, 2, 5);
-      ctx.fillStyle = '#111'; ctx.fillRect(-6, -10, 12, 2); // visor
-      ctx.fillStyle = '#f44'; ctx.fillRect(8, -14, 3, 22); // flaming sword
-      ctx.fillStyle = '#ff0'; ctx.fillRect(7, -14, 5, 3); // flame
-      ctx.fillStyle = '#b8860b'; ctx.fillRect(6, 5, 7, 2); // gold hilt
+      ctx.fillStyle = '#111'; ctx.fillRect(-6, -10, 12, 2);
+      ctx.fillStyle = '#f44'; ctx.fillRect(8, -14, 3, 22);
+      ctx.fillStyle = '#ff0'; ctx.fillRect(7, -14, 5, 3);
+      ctx.fillStyle = '#b8860b'; ctx.fillRect(6, 5, 7, 2);
+      break;
+    }
+    case 'king': {
+      // Royal purple robe
+      ctx.fillStyle = '#4a1070'; ctx.fillRect(-9, -1, 18, 18);
+      ctx.fillStyle = '#6a20a0'; ctx.beginPath(); ctx.arc(0, -8, 9, 0, Math.PI * 2); ctx.fill();
+      // Golden crown
+      ctx.fillStyle = '#ffd700';
+      for (let ci = -7; ci <= 7; ci += 3) { ctx.fillRect(ci, -20, 2.5, 6); ctx.fillRect(ci - 2, -20, 7, 2); }
+      ctx.fillStyle = '#111'; ctx.fillRect(-7, -11, 14, 2);
+      // Jeweled sword
+      ctx.fillStyle = '#e8e8ff'; ctx.fillRect(9, -15, 3, 24);
+      ctx.fillStyle = '#f00'; ctx.fillRect(8, -14, 5, 3);
+      ctx.fillStyle = '#ffd700'; ctx.fillRect(7, 6, 8, 2.5);
+      // Cape
+      ctx.fillStyle = '#8b0000'; ctx.beginPath(); ctx.moveTo(-8, 2); ctx.lineTo(-12, 14); ctx.lineTo(-3, 10); ctx.fill();
+      break;
+    }
+    case 'archer': {
+      ctx.fillStyle = '#3a5020'; ctx.fillRect(-5, -1, 10, 10);
+      ctx.fillStyle = '#4a6030'; ctx.beginPath(); ctx.arc(0, -5, 5, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#8b6914'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(4, -4, 7, -Math.PI * 0.55, Math.PI * 0.55); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, -12); ctx.lineTo(4, -9); ctx.lineTo(0, -6); ctx.stroke();
+      break;
+    }
+    case 'axeman': {
+      ctx.fillStyle = '#6a4a2a'; ctx.fillRect(-5, -1, 10, 10);
+      ctx.fillStyle = '#7a5a3a'; ctx.beginPath(); ctx.arc(0, -5, 5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#999'; ctx.fillRect(4, -9, 8, 6);
+      ctx.fillStyle = '#6b4423'; ctx.fillRect(3, -9, 3, 8);
+      break;
+    }
+    case 'scout': {
+      ctx.fillStyle = '#4a5530'; ctx.fillRect(-5, -1, 10, 10);
+      ctx.fillStyle = '#5a5530'; ctx.beginPath(); ctx.arc(0, -5, 5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#8b6914'; ctx.fillRect(4, -7, 7, 1.5);
       break;
     }
   }
@@ -1143,10 +1200,12 @@ function showOverlays(state, handlers) {
   const start = document.getElementById('start-screen');
   const levelup = document.getElementById('levelup');
   const over = document.getElementById('gameover');
+  const victoryEl = document.getElementById('victory');
   if (!start || !levelup || !over) return;
   start.hidden = state.status !== 'start';
   levelup.hidden = state.status !== 'levelup';
   over.hidden = state.status !== 'over';
+  if (victoryEl) victoryEl.hidden = state.status !== 'victory';
 
   if (state.status === 'levelup') {
     const row = document.getElementById('cards');
@@ -1165,6 +1224,12 @@ function showOverlays(state, handlers) {
     const b = document.getElementById('over-best');
     if (t) t.textContent = formatTime(state.time);
     if (b) b.textContent = formatTime(state.best || loadBest());
+  }
+  if (state.status === 'victory') {
+    const t = document.getElementById('victory-time');
+    const s = document.getElementById('victory-score');
+    if (t) t.textContent = formatTime(state.time);
+    if (s) s.textContent = String(state.score);
   }
 }
 
@@ -1233,6 +1298,8 @@ function init() {
   if (startBtn) startBtn.addEventListener('click', handlers.onStart);
   const restartBtn = document.getElementById('restart-btn');
   if (restartBtn) restartBtn.addEventListener('click', handlers.onRestart);
+  const victoryRestartBtn = document.getElementById('victory-restart-btn');
+  if (victoryRestartBtn) victoryRestartBtn.addEventListener('click', handlers.onRestart);
   const muteBtn = document.getElementById('mute');
   if (muteBtn) muteBtn.addEventListener('click', () => setMute(!muted));
 
@@ -1266,6 +1333,6 @@ if (typeof module !== 'undefined' && module.exports) {
     xpForLevel, applyXp, spawnInterval, formatTime, betterBest,
     steer, spawnProjectiles, offerUpgrades, chooseUpgrade,
     freshGame, loadBest, saveBest,
-    spawnEnemy, killEnemy, spawnFloater, spawnBurst, spawnBossById, getWaveConfig, levelUp, gameOver, update,
+    spawnEnemy, killEnemy, spawnFloater, spawnBurst, spawnBossById, getWaveConfig, levelUp, gameOver, victory, update,
   };
 }
